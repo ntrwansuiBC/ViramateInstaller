@@ -5,5 +5,5 @@ using System.Runtime.InteropServices;
 [assembly: AssemblyDescription("Installer and updater for the Viramate browser extension")]
 [assembly: ComVisible(false)]
 
-[assembly: AssemblyVersion("1.0.3.1")]
-[assembly: AssemblyFileVersion("1.0.3.1")]
+[assembly: AssemblyVersion("2018.3.18.7")]
+[assembly: AssemblyFileVersion("2018.3.18.7")]

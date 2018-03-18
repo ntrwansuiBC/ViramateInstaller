@@ -8,7 +8,7 @@
     <OutputType>WinExe</OutputType>
     <RootNamespace>Viramate</RootNamespace>
     <AssemblyName>Viramate</AssemblyName>
-    <TargetFrameworkVersion>v4.5</TargetFrameworkVersion>
+    <TargetFrameworkVersion>v4.6</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
     <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
     <PlatformTarget>AnyCPU</PlatformTarget>
@@ -63,8 +63,8 @@
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="WebSocketServer.cs" />
-    <None Include="App.config" />
     <EmbeddedResource Include="nmh.json" />
+    <None Include="app.config" />
     <None Include="app.manifest" />
     <None Include="packages.config" />
   </ItemGroup>
@@ -76,15 +76,21 @@
     <Content Include="icon.ico" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+  <Target Name="AfterResolveReferences">
+    <ItemGroup>
+      <EmbeddedResource Include="@(ReferenceCopyLocalPaths)" Condition="'%(ReferenceCopyLocalPaths.Extension)' == '.dll'">
+        <LogicalName>%(ReferenceCopyLocalPaths.DestinationSubDirectory)%(ReferenceCopyLocalPaths.Filename)%(ReferenceCopyLocalPaths.Extension)</LogicalName>
+      </EmbeddedResource>
+    </ItemGroup>
+  </Target>
   <PropertyGroup>
-    <PostBuildEvent>del "$(TargetDir)Newtonsoft.Json.xml"
+    <PostBuildEvent>del "$(TargetDir)*.dll"
+del "$(TargetDir)*.xml"
 "$(TargetDir)..\third-party\7za.exe" a "$(TargetDir)..\built\installer.zip" "$(TargetDir)*"
 "$(TargetDir)..\third-party\7za.exe" a "$(TargetDir)..\built\manager.zip" "$(TargetDir)..\chromeapp\*"
 "$(TargetDir)..\third-party\7za.exe" a "$(TargetDir)..\built\setup.7z" "$(TargetDir)*" "$(TargetDir)..\sfx-bootstrap.bat"
 copy /b "$(TargetDir)..\third-party\7zS.sfx" + "$(TargetDir)..\sfx-config.txt" + "$(TargetDir)..\built\setup.7z" "$(TargetDir)..\built\ViramateSetup.exe"
 del "$(TargetDir)..\built\setup.7z"</PostBuildEvent>
-  </PropertyGroup>
-  <PropertyGroup>
     <PreBuildEvent>del "$(TargetDir)..\built\installer.zip"
 del "$(TargetDir)..\built\manager.zip"
 del "$(TargetDir)..\built\setup.7z"

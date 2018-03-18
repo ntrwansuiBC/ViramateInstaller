@@ -144,24 +144,81 @@ namespace Viramate {
                 var newVersionDirectory = Path.Combine(DataPath, "Installer Update");
                 Directory.CreateDirectory(newVersionDirectory);
 
+                try {
+                    if (Directory.Exists(newVersionDirectory))
+                    foreach (var filename in Directory.GetFiles(newVersionDirectory))
+                        File.Delete(filename);
+                } catch (Exception exc) {
+                    Console.Error.WriteLine($"Error while emptying new version directory: {exc.Message}");
+                }
+
                 Console.WriteLine($"Extracting {result.ZipPath} to {newVersionDirectory} ...");
                 await ExtractZipFile(result.ZipPath, newVersionDirectory);
                 Console.WriteLine($"done.");
 
-                var psi = new ProcessStartInfo(
-                    "cmd", 
-                    "/C \"timeout /T 5 && echo Updating Viramate Installer... && taskkill /f /im viramate.exe & " +
-                    $"copy /Y \"{Path.Combine(newVersionDirectory, "*")}\" \"{ExecutableDirectory}\""
-                ) {
-                    CreateNoWindow = false,
-                    UseShellExecute = false,
-                    WorkingDirectory = ExecutableDirectory
-                };
+                Console.WriteLine("Performing in-place update.");
 
-                using (var proc = Process.Start(psi))
-                    Console.WriteLine("Installer will be updated momentarily.");
+                try {
+                    foreach (var filename in Directory.GetFiles(ExecutableDirectory, "*.old"))
+                        File.Delete(filename);
+                } catch (Exception exc) {
+                    Console.Error.WriteLine($"Error while deleting old update files: {exc.Message}");
+                }
 
-                return true;
+                foreach (var filename in Directory.GetFiles(ExecutableDirectory)) {
+                    try {
+                        File.Move(filename, filename + ".old");
+                    } catch (Exception exc) {
+                        Console.Error.WriteLine($"File operation failed on {filename}: {exc.Message}");
+                    }
+                }
+
+                bool failed = false;
+
+                try {
+                    var refasm = Assembly.ReflectionOnlyLoadFrom(
+                        Path.Combine(newVersionDirectory, "Viramate.exe")
+                    );
+                    if (refasm == null) {
+                        Console.Error.WriteLine("Could not load updated installer");
+                        failed = true;
+                    } else {
+                        Console.WriteLine($"Installing updater v{refasm.GetName().Version}");
+                    }
+                } catch (Exception exc) {
+                    Console.Error.WriteLine($"Failed to load updated installer: {exc.Message}");
+                    failed = true;
+                }
+
+                foreach (var filename in Directory.GetFiles(newVersionDirectory)) {
+                    var destFilename = Path.Combine(ExecutableDirectory, Path.GetFileName(filename));
+                    try {
+                        File.Move(filename, destFilename);
+                        Console.WriteLine($"{Path.GetFileName(filename)}");
+                    } catch (Exception exc) {
+                        Console.Error.WriteLine($"Copy failed for {filename}: {exc.Message}");
+                        failed = true;
+                    }
+                }
+
+                if (failed) {
+                    Console.Error.WriteLine("Attempting to roll back failed update");
+                    foreach (var filename in Directory.GetFiles(ExecutableDirectory, "*.old")) {
+                        var destFilename = filename.Replace(".old", "");
+                        try {
+                            if (File.Exists(destFilename))
+                                File.Delete(destFilename);
+                        } catch (Exception exc) {
+                            Console.Error.WriteLine(exc.Message);
+                        }
+                        File.Move(filename, destFilename);
+                        Console.WriteLine($"{Path.GetFileName(filename)} -> {Path.GetFileName(destFilename)}");
+                    }
+                    return false;
+                } else {
+                    Console.Error.WriteLine("Update installed (probably)");
+                    return true;
+                }
             } catch (Exception exc) {
                 Console.Error.WriteLine(exc.Message);
                 return false;

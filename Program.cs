@@ -62,9 +62,26 @@ namespace Viramate {
         public const string InstallerSourceUrl = "http://viramate.luminance.org/installer.zip";
         public const string ManagerSourceUrl = "http://viramate.luminance.org/manager.zip";
 
-        static void Main (string[] args) {
+        static Program () {
             MyAssembly = Assembly.GetExecutingAssembly();
+            AppDomain.CurrentDomain.AssemblyResolve += CurrentDomain_AssemblyResolve;
+        }
 
+        private static Assembly CurrentDomain_AssemblyResolve (object sender, ResolveEventArgs args) {
+            var dllName = new AssemblyName(args.Name).Name + ".dll";
+            var resourceName = MyAssembly.GetManifestResourceNames().FirstOrDefault(s => s.EndsWith(dllName));
+            if (resourceName != null) {
+                using (var stream = MyAssembly.GetManifestResourceStream(resourceName)) {
+                    var asmbuf = new byte[stream.Length];
+                    stream.Read(asmbuf, 0, asmbuf.Length);
+                    return Assembly.Load(asmbuf);
+                }
+            }
+            Console.Error.WriteLine($"No resource named {dllName}");
+            return null;
+        }
+
+        static void Main (string[] args) {
             try {
                 if ((args.Length <= 1) || !args.Any(a => a.StartsWith("chrome-extension://"))) {
                     InitConsole();
