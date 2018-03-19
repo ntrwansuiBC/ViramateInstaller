@@ -104,8 +104,14 @@ namespace Viramate {
             if (context == null)
                 return false;
 
-            if ((context.Request.Url.LocalPath == "/vm") && (context.Request.HttpMethod.ToLower() == "post"))
-                return true;
+            switch (context.Request.HttpMethod.ToLower()) {
+                case "options":
+                case "post":
+                    if (context.Request.Url.LocalPath == "/vm")
+                        return true;
+
+                    break;
+            }
 
             if (context.Request.IsWebSocketRequest)
                 return true;
@@ -167,13 +173,21 @@ namespace Viramate {
         }
 
         private async Task RequestTask (HttpListenerContext context) {
-            if (context.Request.HttpMethod.ToLower() == "post") {
+            var method = context.Request.HttpMethod.ToLower();
+            context.Response.AddHeader("Access-Control-Allow-Origin", "chrome-extension://fgpokpknehglcioijejfeebigdnbnokj");
+
+            if (method == "post") {
                 Console.Error.WriteLine("Handling sync request");
                 try {
                     await HandleSyncRequest(context);
                 } catch (Exception exc) {
                     Console.Error.WriteLine(exc);
                 }
+            } else if (method == "options") {
+                var r = context.Response;
+                r.AddHeader("Access-Control-Allow-Headers", "Content-Type, Accept, X-Requested-With");
+                r.AddHeader("Access-Control-Allow-Methods", "GET, POST");
+                r.AddHeader("Access-Control-Max-Age", "1728000");
             } else {
                 HttpListenerWebSocketContext wsc = null;
                 try {
