@@ -368,6 +368,11 @@ namespace Viramate {
                 await AutoUpdateInstaller();
 
                 Console.WriteLine("Failed to install extension.");
+
+                if (!Debugger.IsAttached)
+                    Thread.Sleep(1000 * 30);
+
+                Environment.Exit(1);
             }
         }
     }
