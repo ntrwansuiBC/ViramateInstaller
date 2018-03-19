@@ -91,7 +91,8 @@ del "$(TargetDir)*.xml"
 "$(TargetDir)..\third-party\7za.exe" a "$(TargetDir)..\built\setup.7z" "$(TargetDir)*" "$(TargetDir)..\sfx-bootstrap.bat"
 copy /b "$(TargetDir)..\third-party\7zS.sfx" + "$(TargetDir)..\sfx-config.txt" + "$(TargetDir)..\built\setup.7z" "$(TargetDir)..\built\ViramateSetup.exe"
 del "$(TargetDir)..\built\setup.7z"</PostBuildEvent>
-    <PreBuildEvent>del "$(TargetDir)..\built\installer.zip"
+    <PreBuildEvent>del "$(TargetDir)*.old"
+del "$(TargetDir)..\built\installer.zip"
 del "$(TargetDir)..\built\manager.zip"
 del "$(TargetDir)..\built\setup.7z"
 del "$(TargetDir)..\built\ViramateSetup.exe"</PreBuildEvent>

@@ -109,18 +109,14 @@ namespace Viramate {
                 }
 
                 IntPtr
-                    stdinHandle = GetStdHandle(STD_INPUT_HANDLE),
                     stdoutHandle = GetStdHandle(STD_OUTPUT_HANDLE), 
                     stderrHandle = GetStdHandle(STD_ERROR_HANDLE);
-                var stdinStream = new FileStream(new SafeFileHandle(stdinHandle, true), FileAccess.Read);
                 var stdoutStream = new FileStream(new SafeFileHandle(stdoutHandle, true), FileAccess.Write);
                 var stderrStream = new FileStream(new SafeFileHandle(stderrHandle, true), FileAccess.Write);
                 var enc = new UTF8Encoding(false, false);
-                var stdin = new StreamReader(stdinStream, enc);
                 var stdout = new StreamWriter(stdoutStream, enc);
                 var stderr = new StreamWriter(stderrStream, enc);
                 stdout.AutoFlush = stderr.AutoFlush = true;
-                Console.SetIn(stdin);
                 Console.SetOut(stdout);
                 Console.SetError(stderr);
             }

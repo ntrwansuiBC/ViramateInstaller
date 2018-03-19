@@ -27,7 +27,13 @@ namespace Viramate {
         private DateTime LastActivity = default(DateTime);
 
         public WebSocketServer () {
-            Init();
+            LastActivity = DateTime.UtcNow;
+            try {
+                Init();
+            } catch (Exception exc) {
+                Console.Error.WriteLine("Failed to init http server: {0}", exc);
+                throw;
+            }
         }
 
         public async Task<bool> Run () {
@@ -98,6 +104,9 @@ namespace Viramate {
             if (context == null)
                 return false;
 
+            if ((context.Request.Url.LocalPath == "/vm") && (context.Request.HttpMethod.ToLower() == "post"))
+                return true;
+
             if (context.Request.IsWebSocketRequest)
                 return true;
 
@@ -136,26 +145,56 @@ namespace Viramate {
             return ws.SendAsync(new ArraySegment<byte>(buffer), WebSocketMessageType.Text, true, CancellationToken.None);
         }
 
-        private async Task RequestTask (HttpListenerContext context) {
-            HttpListenerWebSocketContext wsc = null;
+        private async Task HandleSyncRequest (HttpListenerContext context) {
             try {
+                context.Response.AddHeader("installerversion", Program.MyAssembly.GetName().Version.ToString());
+                context.Response.ContentType = "application/json";
+
+                var readBuf = new byte[102400];
+                var count = context.Request.InputStream.Read(readBuf, 0, readBuf.Length);
+                var result = await ProcessCommand(readBuf, count);
+
+                if (result != null) {
+                    var json = JsonConvert.SerializeObject(result);
+                    var bytes = Encoding.UTF8.GetBytes(json);
+                    context.Response.OutputStream.Write(bytes, 0, bytes.Length);
+                }
+            } catch (Exception exc) {
+                context.Response.StatusCode = 500;
+            } finally {
+                context.Response.Close();
+            }
+        }
+
+        private async Task RequestTask (HttpListenerContext context) {
+            if (context.Request.HttpMethod.ToLower() == "post") {
+                Console.Error.WriteLine("Handling sync request");
+                try {
+                    await HandleSyncRequest(context);
+                } catch (Exception exc) {
+                    Console.Error.WriteLine(exc);
+                }
+            } else {
+                HttpListenerWebSocketContext wsc = null;
                 try {
                     wsc = await context.AcceptWebSocketAsync(null);
                 } catch (Exception _) {
                     Console.Error.WriteLine("Accept failed {0}", _);
                     return;
                 }
-                var ws = wsc.WebSocket;
 
-                await SocketMainLoop(ws);
-            } catch (Exception exc) {
-                Console.Error.WriteLine(exc);
-            } finally {
-                if (wsc != null)
-                    wsc.WebSocket.Dispose();
+                try {
+                    var ws = wsc.WebSocket;
+                    await SocketMainLoop(ws);
+                } catch (Exception exc) {
+                    Console.Error.WriteLine(exc);
+                } finally {
+                        if (wsc != null)
+                            wsc.WebSocket.Dispose();
+                }
+
+                Console.Error.WriteLine("ws disconnect");
             }
-
-            Console.Error.WriteLine("ws disconnect");
         }
 
         private async Task SocketMainLoop (WebSocket ws) {
@@ -178,122 +217,129 @@ namespace Viramate {
                     break;
                 }
 
-                string json = "";
-                JObject obj = null;
-                try {
-                    json = Encoding.UTF8.GetString(readBuffer.Array, 0, count);
-                    obj = (JObject)JsonConvert.DeserializeObject(json);
-                } catch (Exception exc) {
-                    Console.Error.WriteLine("JSON parse error: {0}", exc);
-                    Console.Error.WriteLine("// Failed json blob below //");
-                    Console.Error.WriteLine(json);
-                    Console.Error.WriteLine("// Failed json blob above //");
-                }
-
-                if (obj == null)
-                    continue;
-
-                LastActivity = DateTime.UtcNow;
-
-                var msgType = (string)obj["type"];
-                int? id = null;
-                if (obj.ContainsKey("id"))
-                    id = obj["id"].ToObject<int>();
-
-                switch (msgType) {
-                    case "getVersion": {
-                        await Send(ws, new {
-                            result = new {
-                                extension = Program.ReadManifestVersion(null),
-                                installer = Program.MyAssembly.GetName().Version.ToString()
-                            },
-                            id = id
-                        });
-                        break;
-                    }
-
-                    case "forceInstallUpdate":
-                    case "installUpdate": {
-                        try {
-                            var result = await Program.InstallExtensionFiles((msgType == "installUpdate"), null);
-                            await Send(ws, new {
-                                result = new {
-                                    result = result.ToString(),
-                                    installedVersion = Program.ReadManifestVersion(null)
-                                },
-                                id = id,
-                            });
-                        } catch (Exception exc) {
-                            Console.Error.WriteLine(exc);
-                            await Send(ws, new {
-                                result = new {
-                                    result = "Failed",
-                                    error = exc.Message
-                                },
-                                id = id,
-                            });
-                        }
-                        break;
-                    }
-
-                    case "downloadNewUpdate": {
-                        try {
-                            var result = await Program.DownloadLatest(Program.ExtensionSourceUrl);
-                            await Send(ws, new {
-                                result = new {
-                                    ok = true,
-                                    installedVersion = Program.ReadManifestVersion(null),
-                                    downloadedVersion = Program.ReadManifestVersion(result.ZipPath)
-                                },
-                                id = id,
-                            });
-                        } catch (Exception exc) {
-                            Console.Error.WriteLine(exc);
-                            await Send(ws, new {
-                                result = new {
-                                    ok = false,
-                                    error = exc.Message
-                                },
-                                id = id,
-                            });
-                        }
-                        break;
-                    }
-
-                    case "autoUpdateInstaller": {
-                        try {
-                            var result = await Program.AutoUpdateInstaller();
-                            await Send(ws, new {
-                                result = result,
-                                id = id
-                            });
-
-                            if (result) {
-                                Console.WriteLine("Exiting in response to successful installer update request.");
-                                Environment.Exit(0);
-                                return;
-                            }
-                        } catch (Exception exc) {
-                            Console.Error.WriteLine(exc);
-                            await Send(ws, new {
-                                result = false,
-                                id = id
-                            });
-                        }
-                        break;
-                    }
-
-                    default:
-                        Console.Error.WriteLine("Unhandled message {0}", msgType);
-                        if (id != null)
-                            await Send(ws, new {
-                                id = id
-                            });
-                        break;
-                }
+                var result = await ProcessCommand(readBuffer.Array, count);
+                if (result != null)
+                    await Send(ws, result);
             }
 
             Dispose();
+        }
+
+        private async Task<object> ProcessCommand (byte[] buffer, int count) {
+            string json = "";
+            JObject obj = null;
+            try {
+                json = Encoding.UTF8.GetString(buffer, 0, count);
+                obj = (JObject)JsonConvert.DeserializeObject(json);
+            } catch (Exception exc) {
+                Console.Error.WriteLine($"JSON parse error: {exc}");
+                Console.Error.WriteLine("// Failed json blob below //");
+                Console.Error.WriteLine(json);
+                Console.Error.WriteLine("// Failed json blob above //");
+            }
+
+            if (obj == null)
+                return null;
+
+            Console.Error.WriteLine($"Running command: {json}");
+
+            LastActivity = DateTime.UtcNow;
+
+            var msgType = (string)obj["type"];
+            int? id = null;
+            if (obj.ContainsKey("id"))
+                id = obj["id"].ToObject<int>();
+
+            switch (msgType) {
+                case "getVersion": {
+                    return new {
+                        result = new {
+                            extension = Program.ReadManifestVersion(null),
+                            installer = Program.MyAssembly.GetName().Version.ToString()
+                        },
+                        id = id
+                    };
+                }
+
+                case "forceInstallUpdate":
+                case "installUpdate": {
+                    try {
+                        var result = await Program.InstallExtensionFiles((msgType == "installUpdate"), null);
+                        return new {
+                            result = new {
+                                result = result.ToString(),
+                                installedVersion = Program.ReadManifestVersion(null)
+                            },
+                            id = id,
+                        };
+                    } catch (Exception exc) {
+                        Console.Error.WriteLine(exc);
+                        return new {
+                            result = new {
+                                result = "Failed",
+                                error = exc.Message
+                            },
+                            id = id,
+                        };
+                    }
+                }
+
+                case "downloadNewUpdate": {
+                    try {
+                        var result = await Program.DownloadLatest(Program.ExtensionSourceUrl);
+                        return new {
+                            result = new {
+                                ok = true,
+                                installedVersion = Program.ReadManifestVersion(null),
+                                downloadedVersion = Program.ReadManifestVersion(result.ZipPath)
+                            },
+                            id = id,
+                        };
+                    } catch (Exception exc) {
+                        Console.Error.WriteLine(exc);
+                        return new {
+                            result = new {
+                                ok = false,
+                                error = exc.Message
+                            },
+                            id = id,
+                        };
+                    }
+                }
+
+                case "autoUpdateInstaller": {
+                    try {
+                        var result = await Program.AutoUpdateInstaller();
+                        if (result) {
+                            Console.WriteLine("Exiting in response to successful installer update request.");
+                            ThreadPool.QueueUserWorkItem((_) => {
+                                Thread.Sleep(1000);
+                                Environment.Exit(0);
+                            });
+                        }
+
+                        return new {
+                            result = result,
+                            id = id
+                        };
+                    } catch (Exception exc) {
+                        Console.Error.WriteLine(exc);
+                        return new {
+                            result = false,
+                            id = id
+                        };
+                    }
+                }
+
+                default:
+                    Console.Error.WriteLine("Unhandled message {0}", msgType);
+                    if (id != null)
+                        return new {
+                            id = id
+                        };
+                    else
+                        return null;
+            }
         }
 
         public Task Send<T> (WebSocket ws, T value) {

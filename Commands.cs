@@ -367,12 +367,7 @@ namespace Viramate {
             } else {
                 await AutoUpdateInstaller();
 
-                if (!Debugger.IsAttached && !IsRunningInsideCmd) {
-                    Console.WriteLine("Failed to install extension. Press enter to exit.");
-                    Console.ReadLine();
-                } else {
-                    Console.WriteLine("Failed to install extension.");
-                }
+                Console.WriteLine("Failed to install extension.");
             }
         }
     }
