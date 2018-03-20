@@ -1,0 +1,17 @@
+### What's wrong?
+
+
+
+### What error messages (if any) are in the Chrome developer console? (Ctrl+Shift+I)
+
+
+
+### What version of Viramate and Viramate Installer are you using? (Appears in the Viramate Options page)
+
+
+
+### What version of Chrome are you using? (The first three lines of chrome://version/)
+
+
+
+### What's your favorite color?
