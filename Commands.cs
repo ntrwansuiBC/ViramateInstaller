@@ -159,13 +159,13 @@ namespace Viramate {
                 Console.WriteLine("Performing in-place update.");
 
                 try {
-                    foreach (var filename in Directory.GetFiles(ExecutableDirectory, "*.old"))
+                    foreach (var filename in Directory.GetFiles(InstallerInstallPath, "*.old"))
                         File.Delete(filename);
                 } catch (Exception exc) {
                     Console.Error.WriteLine($"Error while deleting old update files: {exc.Message}");
                 }
 
-                foreach (var filename in Directory.GetFiles(ExecutableDirectory)) {
+                foreach (var filename in Directory.GetFiles(InstallerInstallPath)) {
                     try {
                         File.Move(filename, filename + ".old");
                     } catch (Exception exc) {
@@ -191,7 +191,7 @@ namespace Viramate {
                 }
 
                 foreach (var filename in Directory.GetFiles(newVersionDirectory)) {
-                    var destFilename = Path.Combine(ExecutableDirectory, Path.GetFileName(filename));
+                    var destFilename = Path.Combine(InstallerInstallPath, Path.GetFileName(filename));
                     try {
                         File.Move(filename, destFilename);
                         Console.WriteLine($"{Path.GetFileName(filename)}");
@@ -203,7 +203,7 @@ namespace Viramate {
 
                 if (failed) {
                     Console.Error.WriteLine("Attempting to roll back failed update");
-                    foreach (var filename in Directory.GetFiles(ExecutableDirectory, "*.old")) {
+                    foreach (var filename in Directory.GetFiles(InstallerInstallPath, "*.old")) {
                         var destFilename = filename.Replace(".old", "");
                         try {
                             if (File.Exists(destFilename))
@@ -232,6 +232,18 @@ namespace Viramate {
                 Console.WriteLine("Detected old installation. Removing manifest. You'll need to re-install!");
                 onlyIfModified = false;
                 File.Delete(Path.Combine(DataPath, "manifest.json"));
+            }
+
+            if (!Directory.Exists(InstallerInstallPath))
+                Directory.CreateDirectory(InstallerInstallPath);
+
+            if (ExecutablePath != InstallerExecutablePath) {
+                Console.WriteLine($"First run. Copying {ExecutablePath} to {InstallerExecutablePath}");
+                try {
+                    File.Copy(ExecutablePath, InstallerExecutablePath, true);
+                } catch (Exception exc) {
+                    Console.Error.WriteLine(exc.Message);
+                }
             }
 
             if (installFromDisk.GetValueOrDefault(InstallFromDisk)) {
@@ -289,6 +301,8 @@ namespace Viramate {
             if (Environment.GetCommandLineArgs().Contains("--version"))
                 return;
 
+            Console.WriteLine($"Use viramate -? for info on command line switches");
+
             if (Environment.GetCommandLineArgs().Contains("--update"))
                 await AutoUpdateInstaller();
 
@@ -304,7 +318,7 @@ namespace Viramate {
                 manifestText = manifestText
                     .Replace(
                         "$executable_path$", 
-                        ExecutablePath.Replace("\\", "\\\\").Replace("\"", "\\\"")
+                        InstallerExecutablePath.Replace("\\", "\\\\").Replace("\"", "\\\"")
                     ).Replace(
                         "$extension_id$", ExtensionId
                     );
@@ -355,7 +369,6 @@ namespace Viramate {
                     Console.WriteLine("Opening install instructions...");
                     Process.Start(helpFilePath);
                 } else if (!Debugger.IsAttached && !IsRunningInsideCmd) {
-                    Console.WriteLine("Press enter to exit.");
                     return;
                 }
 
@@ -364,6 +377,11 @@ namespace Viramate {
                     await Task.Delay(2000);
                     Process.Start(DataPath);
                 }
+
+                if (!Debugger.IsAttached)
+                    Thread.Sleep(1000 * 30);
+
+                Environment.Exit(0);
             } else {
                 await AutoUpdateInstaller();
 
@@ -374,6 +392,29 @@ namespace Viramate {
 
                 Environment.Exit(1);
             }
+        }
+
+        public static void PrintHelp () {
+            Console.WriteLine();
+            Console.WriteLine($"Viramate Installer v{MyAssembly.GetName().Version}");
+            Console.WriteLine(
+@"-? /?
+    Print help
+--version
+    Print version number and quit
+--update
+    Update the installer even if install succeeds
+--nodir
+    Don't open the install directory
+--nohelp
+    Don't open the help webpage after install
+--disk
+    Only install from a local directory instead of the internet (for debugging purposes)
+--network
+    Only install from the internet, not a local directory
+--force
+    Force install/update even if nothing is changed"
+            );
         }
     }
 

@@ -58,9 +58,9 @@ namespace Viramate {
         public static Assembly MyAssembly;
         static bool IsRunningInsideCmd = false;
 
-        public const string ExtensionSourceUrl = "http://viramate.luminance.org/ext.zip";
-        public const string InstallerSourceUrl = "http://viramate.luminance.org/installer.zip";
-        public const string ManagerSourceUrl = "http://viramate.luminance.org/manager.zip";
+        public const string ExtensionSourceUrl = "https://viramate.luminance.org/ext.zip";
+        public const string InstallerSourceUrl = "https://viramate.luminance.org/installer.zip";
+        public const string ManagerSourceUrl = "https://viramate.luminance.org/manager.zip";
 
         static Program () {
             MyAssembly = Assembly.GetExecutingAssembly();
@@ -68,12 +68,14 @@ namespace Viramate {
         }
 
         private static Assembly CurrentDomain_AssemblyResolve (object sender, ResolveEventArgs args) {
-            var dllName = new AssemblyName(args.Name).Name + ".dll";
+            const int maxLength = 1024 * 1024 * 2;
+            var dllName = new AssemblyName(args.Name).Name + ".dll.gz";
             var resourceName = MyAssembly.GetManifestResourceNames().FirstOrDefault(s => s.EndsWith(dllName));
             if (resourceName != null) {
-                using (var stream = MyAssembly.GetManifestResourceStream(resourceName)) {
-                    var asmbuf = new byte[stream.Length];
-                    stream.Read(asmbuf, 0, asmbuf.Length);
+                using (var stream = MyAssembly.GetManifestResourceStream(resourceName))
+                using (var gzstream = new GZipStream(stream, CompressionMode.Decompress, true)) {
+                    var asmbuf = new byte[maxLength];
+                    var bytesRead = gzstream.Read(asmbuf, 0, maxLength);
                     return Assembly.Load(asmbuf);
                 }
             }
@@ -83,7 +85,16 @@ namespace Viramate {
 
         static void Main (string[] args) {
             try {
-                if ((args.Length <= 1) || !args.Any(a => a.StartsWith("chrome-extension://"))) {
+                if (
+                    args.Contains("/?") ||
+                    args.Contains("-?")
+                ) {
+                    InitConsole();
+                    PrintHelp();
+                } else if (
+                    (args.Length <= 1) || 
+                    !args.Any(a => a.StartsWith("chrome-extension://"))
+                ) {
                     InitConsole();
                     InstallExtension().Wait();
                 } else
@@ -186,6 +197,18 @@ namespace Viramate {
             }
         }
 
+        static string InstallerInstallPath {
+            get {
+                return Path.Combine(DataPath, "Installer");
+            }
+        }
+
+        static string InstallerExecutablePath {
+            get {
+                return Path.GetFullPath(Path.Combine(DataPath, "Installer", "Viramate.exe"));
+            }
+        }
+
         static string ExtensionInstallPath {
             get {
                 return Path.Combine(DataPath, "Viramate");
@@ -202,7 +225,7 @@ namespace Viramate {
             get {
                 var cb = MyAssembly.CodeBase;
                 var uri = new Uri(cb);
-                return uri.LocalPath;
+                return Path.GetFullPath(uri.LocalPath);
             }
         }
         
