@@ -65,6 +65,7 @@ namespace Viramate {
         static Program () {
             MyAssembly = Assembly.GetExecutingAssembly();
             AppDomain.CurrentDomain.AssemblyResolve += CurrentDomain_AssemblyResolve;
+            ServicePointManager.SecurityProtocol |= SecurityProtocolType.Tls11 | SecurityProtocolType.Tls12;
         }
 
         private static Assembly CurrentDomain_AssemblyResolve (object sender, ResolveEventArgs args) {
