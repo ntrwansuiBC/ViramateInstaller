@@ -110,6 +110,7 @@
 del "$(TargetDir)*.xml"
 "$(TargetDir)..\third-party\7za.exe" a "$(TargetDir)..\built\installer.zip" "$(TargetDir)*"
 "$(TargetDir)..\third-party\7za.exe" a "$(TargetDir)..\built\manager.zip" "$(TargetDir)..\chromeapp\*"
+"$(TargetDir)..\third-party\signtool.exe" sign /sha1 "E7FDDA246584AAD9040B0E61F99E6872F1745FB6" /du "http://viramate.luminance.org/" /t http://timestamp.comodoca.com/authenticode /v "$(TargetPath)"
 copy "$(TargetPath)" "$(TargetDir)..\built\ViramateSetup.exe"</PostBuildEvent>
     <PreBuildEvent>del "$(TargetDir)*.old"
 del "$(TargetDir)..\built\installer.zip"
