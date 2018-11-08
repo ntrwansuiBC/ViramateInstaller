@@ -4,7 +4,7 @@ chrome.runtime.onMessage.addListener(onExternalMessage);
 chrome.runtime.onMessageExternal.addListener(onExternalMessage);
 
 function log (...args) {
-    args.unshift((new Date()).toLocaleString() + " |");
+    args.unshift((new Date()).toLocaleTimeString("en-US", {hour12: false}) + " |");
     console.log.apply(console, args);
 };
 
