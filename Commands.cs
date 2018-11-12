@@ -250,25 +250,8 @@ namespace Viramate {
                 Console.WriteLine($"Copying from {DiskSourcePath} to {ExtensionInstallPath} ...");
                 await UpdateFromFolder(DiskSourcePath, ExtensionInstallPath);
                 Console.WriteLine("done.");
-
-                var managerPath = Path.Combine(ExecutableDirectory, "..", "chromeapp");
-                if (Directory.Exists(managerPath)) {
-                    Console.WriteLine($"Copying from {managerPath} to {ManagerInstallPath} ...");
-                    await UpdateFromFolder(managerPath, ManagerInstallPath);
-                    Console.WriteLine("done.");
-                }
             } else {
                 DownloadResult result;
-
-                Console.Write($"Downloading {ManagerSourceUrl}... ");
-                try {
-                    result = await DownloadLatest(ManagerSourceUrl);
-                    Console.WriteLine($"Extracting {result.ZipPath} to {ManagerInstallPath} ...");
-                    await ExtractZipFile(result.ZipPath, ManagerInstallPath);
-                    Console.WriteLine($"done.");
-                } catch (Exception exc) {
-                    Console.Error.WriteLine(exc.Message);
-                }
 
                 Console.Write($"Downloading {ExtensionSourceUrl}... ");
                 try {
@@ -281,6 +264,7 @@ namespace Viramate {
                     return InstallResult.Failed;
                 }
 
+                Console.WriteLine($"Current version {Program.ReadManifestVersion(null)}, new version {Program.ReadManifestVersion(result.ZipPath)}");
                 Console.WriteLine($"Extracting {result.ZipPath} to {ExtensionInstallPath} ...");
                 await ExtractZipFile(result.ZipPath, ExtensionInstallPath);
                 Console.WriteLine($"done.");

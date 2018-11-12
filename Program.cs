@@ -60,7 +60,6 @@ namespace Viramate {
 
         public const string ExtensionSourceUrl = "https://viramate.luminance.org/ext.zip";
         public const string InstallerSourceUrl = "https://viramate.luminance.org/installer.zip";
-        public const string ManagerSourceUrl = "https://viramate.luminance.org/manager.zip";
 
         static Program () {
             MyAssembly = Assembly.GetExecutingAssembly();
@@ -213,12 +212,6 @@ namespace Viramate {
         static string ExtensionInstallPath {
             get {
                 return Path.Combine(DataPath, "Viramate");
-            }
-        }
-
-        static string ManagerInstallPath {
-            get {
-                return Path.Combine(DataPath, "Viramate Extension Manager");
             }
         }
 
