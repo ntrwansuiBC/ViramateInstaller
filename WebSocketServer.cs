@@ -22,7 +22,7 @@ namespace Viramate {
 
         private readonly object Lock = new object();
 
-        public string Url = "ws://127.0.0.1:8678/";
+        public string Url = "ws://localhost:8678/";
 
         private DateTime LastActivity = default(DateTime);
 

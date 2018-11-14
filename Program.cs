@@ -235,12 +235,17 @@ namespace Viramate {
             }
         }
 
+        public static string LogFilePath {
+            get {
+                return Path.Combine(DataPath, "installer.log");
+            }
+        }
+
         static void MessagingHostMainLoop () {
             var stdin = Console.OpenStandardInput();
             var stdout = Console.OpenStandardOutput();
-            var logFilePath = Path.Combine(DataPath, "installer.log");
 
-            using (var log = new StreamWriter(logFilePath, true, Encoding.UTF8)) {
+            using (var log = new StreamWriter(LogFilePath, true, Encoding.UTF8)) {
                 Console.SetOut(log);
                 Console.SetError(log);
                 log.WriteLine($"{DateTime.UtcNow.ToLongTimeString()} > Installer started as native messaging host. Command line: {Environment.CommandLine}");

@@ -277,104 +277,129 @@ namespace Viramate {
             return MyAssembly.GetManifestResourceStream("Viramate." + name.Replace("/", ".").Replace("\\", "."));
         }
 
+        static void LogWrite (StreamWriter log, string text = "") {
+            if (log != null)
+                log.WriteLine(text);
+            Console.WriteLine(text);
+        }
+
         public static async Task InstallExtension () {
             var allowAutoClose = true;
 
-            Console.WriteLine();
-            Console.WriteLine($"Viramate Installer v{MyAssembly.GetName().Version}");
-            if (Environment.GetCommandLineArgs().Contains("--version"))
-                return;
+            StreamWriter log = null;
+            try {
+                log = new StreamWriter(LogFilePath, false, Encoding.UTF8);
+                log.AutoFlush = true;
+            } catch (Exception exc) {
+                Console.WriteLine($"Failed creating log file: {exc}");
+                try {
+                    log = new StreamWriter(LogFilePath, true, Encoding.UTF8);
+                    log.AutoFlush = true;
+                } catch (Exception exc2) {
+                    Console.WriteLine($"Failed appending to log file: {exc2}");
+                }
+            }
 
-            Console.WriteLine($"Use viramate -? for info on command line switches");
+            try {
+                Console.WriteLine();
+                Console.WriteLine($"Viramate Installer v{MyAssembly.GetName().Version}");
+                if (Environment.GetCommandLineArgs().Contains("--version"))
+                    return;
 
-            if (Environment.GetCommandLineArgs().Contains("--update"))
-                await AutoUpdateInstaller();
+                Console.WriteLine($"Use viramate -? for info on command line switches");
 
-            Console.WriteLine("Installing extension. This'll take a moment...");
+                if (Environment.GetCommandLineArgs().Contains("--update"))
+                    await AutoUpdateInstaller();
 
-            if (await InstallExtensionFiles(false, null) != InstallResult.Failed) {
-                Console.WriteLine($"Extension id: {ExtensionId}");
+                LogWrite(log, "Installing extension. This'll take a moment...");
 
-                string manifestText;
-                using (var s = new StreamReader(OpenResource("nmh.json"), Encoding.UTF8))
-                    manifestText = s.ReadToEnd();
+                if (await InstallExtensionFiles(false, null) != InstallResult.Failed) {
+                    LogWrite(log, $"Extension id: {ExtensionId}");
 
-                manifestText = manifestText
-                    .Replace(
-                        "$executable_path$", 
-                        InstallerExecutablePath.Replace("\\", "\\\\").Replace("\"", "\\\"")
-                    ).Replace(
-                        "$extension_id$", ExtensionId
+                    string manifestText;
+                    using (var s = new StreamReader(OpenResource("nmh.json"), Encoding.UTF8))
+                        manifestText = s.ReadToEnd();
+
+                    manifestText = manifestText
+                        .Replace(
+                            "$executable_path$", 
+                            InstallerExecutablePath.Replace("\\", "\\\\").Replace("\"", "\\\"")
+                        ).Replace(
+                            "$extension_id$", ExtensionId
+                        );
+
+                    var manifestPath = Path.Combine(MiscPath, "nmh.json");
+                    Directory.CreateDirectory(MiscPath);
+                    File.WriteAllText(manifestPath, manifestText);
+
+                    Directory.CreateDirectory(Path.Combine(DataPath, "Help"));
+                    foreach (var n in MyAssembly.GetManifestResourceNames()) {
+                        if (!n.EndsWith(".gif") && !n.EndsWith(".png"))
+                            continue;
+
+                        var destinationPath = Path.Combine(DataPath, n.Replace("Viramate.", "").Replace("Help.", "Help\\"));
+                        using (var src = MyAssembly.GetManifestResourceStream(n))
+                        using (var dst = File.Open(destinationPath, FileMode.Create))
+                            await src.CopyToAsync(dst);
+                    }
+
+                    const string keyName = @"Software\Google\Chrome\NativeMessagingHosts\com.viramate.installer";
+                    using (var key = Registry.CurrentUser.CreateSubKey(keyName)) {
+                        LogWrite(log, $"{keyName}\\@ = {manifestPath}");
+                        key.SetValue(null, manifestPath);
+                    }
+
+                    try {
+                        WebSocketServer.SetupFirewallRule();
+                    } catch (Exception exc) {
+                        LogWrite(log, $"Failed to install firewall rule: {exc}");
+                        allowAutoClose = false;
+                    }
+
+                    string helpFileText;
+                    using (var s = new StreamReader(OpenResource("Help/index.html"), Encoding.UTF8))
+                        helpFileText = s.ReadToEnd();
+
+                    helpFileText = Regex.Replace(
+                        helpFileText, 
+                        @"\<pre\ id='install_path'>[^<]*\</pre\>", 
+                        @"<pre id='install_path'>" + DataPath + "</pre>"
                     );
 
-                var manifestPath = Path.Combine(MiscPath, "nmh.json");
-                Directory.CreateDirectory(MiscPath);
-                File.WriteAllText(manifestPath, manifestText);
+                    var helpFilePath = Path.Combine(DataPath, "Help", "index.html");
+                    File.WriteAllText(helpFilePath, helpFileText);
 
-                Directory.CreateDirectory(Path.Combine(DataPath, "Help"));
-                foreach (var n in MyAssembly.GetManifestResourceNames()) {
-                    if (!n.EndsWith(".gif") && !n.EndsWith(".png"))
-                        continue;
+                    LogWrite(log, $"Viramate v{ReadManifestVersion(null)} has been installed.");
+                    if (!Environment.GetCommandLineArgs().Contains("--nohelp")) {
+                        LogWrite(log, "Opening install instructions...");
+                        Process.Start(helpFilePath);
+                    } else if (!Debugger.IsAttached && !IsRunningInsideCmd) {
+                        return;
+                    }
 
-                    var destinationPath = Path.Combine(DataPath, n.Replace("Viramate.", "").Replace("Help.", "Help\\"));
-                    using (var src = MyAssembly.GetManifestResourceStream(n))
-                    using (var dst = File.Open(destinationPath, FileMode.Create))
-                        await src.CopyToAsync(dst);
+                    if (!Environment.GetCommandLineArgs().Contains("--nodir")) {
+                        LogWrite(log, "Waiting, then opening install directory...");
+                        await Task.Delay(2000);
+                        Process.Start(DataPath);
+                    }
+
+                    if (!Debugger.IsAttached)
+                        Thread.Sleep(1000 * 30);
+
+                    Environment.Exit(0);
+                } else {
+                    await AutoUpdateInstaller();
+
+                    LogWrite(log, "Failed to install extension.");
+
+                    if (!Debugger.IsAttached)
+                        Thread.Sleep(1000 * 30);
+
+                    Environment.Exit(1);
                 }
-
-                const string keyName = @"Software\Google\Chrome\NativeMessagingHosts\com.viramate.installer";
-                using (var key = Registry.CurrentUser.CreateSubKey(keyName)) {
-                    Console.WriteLine($"{keyName}\\@ = {manifestPath}");
-                    key.SetValue(null, manifestPath);
-                }
-
-                try {
-                    WebSocketServer.SetupFirewallRule();
-                } catch (Exception exc) {
-                    Console.WriteLine("Failed to install firewall rule: {0}", exc);
-                    allowAutoClose = false;
-                }
-
-                string helpFileText;
-                using (var s = new StreamReader(OpenResource("Help/index.html"), Encoding.UTF8))
-                    helpFileText = s.ReadToEnd();
-
-                helpFileText = Regex.Replace(
-                    helpFileText, 
-                    @"\<pre\ id='install_path'>[^<]*\</pre\>", 
-                    @"<pre id='install_path'>" + DataPath + "</pre>"
-                );
-
-                var helpFilePath = Path.Combine(DataPath, "Help", "index.html");
-                File.WriteAllText(helpFilePath, helpFileText);
-
-                Console.WriteLine($"Viramate v{ReadManifestVersion(null)} has been installed.");
-                if (!Environment.GetCommandLineArgs().Contains("--nohelp")) {
-                    Console.WriteLine("Opening install instructions...");
-                    Process.Start(helpFilePath);
-                } else if (!Debugger.IsAttached && !IsRunningInsideCmd) {
-                    return;
-                }
-
-                if (!Environment.GetCommandLineArgs().Contains("--nodir")) {
-                    Console.WriteLine("Waiting, then opening install directory...");
-                    await Task.Delay(2000);
-                    Process.Start(DataPath);
-                }
-
-                if (!Debugger.IsAttached)
-                    Thread.Sleep(1000 * 30);
-
-                Environment.Exit(0);
-            } else {
-                await AutoUpdateInstaller();
-
-                Console.WriteLine("Failed to install extension.");
-
-                if (!Debugger.IsAttached)
-                    Thread.Sleep(1000 * 30);
-
-                Environment.Exit(1);
+            } finally {
+                if (log != null)
+                    log.Dispose();
             }
         }
 
